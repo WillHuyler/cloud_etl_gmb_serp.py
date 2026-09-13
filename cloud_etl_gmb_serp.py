@@ -24,7 +24,7 @@ def fetch_serp_data(keyword, client_name, location_target):
         print(f"API request failed for {keyword}: {e}")
         return {"rank": 99, "type": "Unranked", "volume": 0, "competitors": []}
     
-    # Extract search volume estimate
+    # Extract total results index size as volume proxy
     search_volume = res.get("search_information", {}).get("total_results", 0)
 
     client_rank = 99
@@ -36,22 +36,24 @@ def fetch_serp_data(keyword, client_name, location_target):
     if isinstance(local_results, list):
         for idx, item in enumerate(local_results):
             if isinstance(item, dict):
-                title = item.get("title", "Unknown Business")
-                if len(competitors) < 3 and client_name.lower() not in title.lower():
-                    competitors.append(f"#{idx+1} {title}")
-                if client_name.lower() in title.lower() and client_rank == 99:
+                title = item.get("title", "")
+                if title and client_name.lower() not in title.lower():
+                    if len(competitors) < 3:
+                        competitors.append(f"Map #{idx+1}: {title}")
+                elif title and client_name.lower() in title.lower() and client_rank == 99:
                     client_rank = idx + 1
                     rank_type = "Local Pack"
 
-    # 2. Parse Organic Results if local pack didn't yield top 3
+    # 2. Parse Organic Results
     organic_results = res.get("organic_results", [])
     if isinstance(organic_results, list):
         for idx, item in enumerate(organic_results):
             if isinstance(item, dict):
-                title = item.get("title", "Unknown Site")
-                if len(competitors) < 3 and client_name.lower() not in title.lower():
-                    competitors.append(f"Org #{idx+1} {title[:30]}")
-                if client_name.lower() in title.lower() and client_rank == 99:
+                title = item.get("title", "")
+                if title and client_name.lower() not in title.lower():
+                    if len(competitors) < 3:
+                        competitors.append(f"Org #{idx+1}: {title[:25]}...")
+                elif title and client_name.lower() in title.lower() and client_rank == 99:
                     client_rank = idx + 1
                     rank_type = "Organic"
 
@@ -89,7 +91,7 @@ def sync_active_keywords():
             "top_competitors": telemetry["competitors"]
         }).execute()
 
-        print(f"Logged '{keyword}' | Rank #{telemetry['rank']} | Competitors: {telemetry['competitors']}")
+        print(f"Logged '{keyword}' for {client_name} at target '{target_location}': Rank #{telemetry['rank']} | Competitors: {telemetry['competitors']}")
 
 if __name__ == "__main__":
     sync_active_keywords()
