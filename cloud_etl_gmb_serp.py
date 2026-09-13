@@ -9,24 +9,28 @@ SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def fetch_serp_data(keyword, client_name, location_target):
-    """Scan local pack/organic results, extract top 3 competitors, and capture search volume"""
+    """Scan local pack/organic results targeting a specific Zip Code or Location string"""
     url = "https://serpapi.com/search"
+    
+    # Standardize SerpApi location targeting (e.g. Zip Code + United States)
+    target_geo = location_target if location_target else "United States"
+    if target_geo.isdigit() and len(target_geo) == 5:
+        target_geo = f"{target_geo}, United States"
+
     params = {
         "engine": "google",
         "q": keyword,
-        "location": location_target,
+        "location": target_geo,
         "api_key": SERPAPI_KEY
     }
     
     try:
         res = requests.get(url, params=params).json()
     except Exception as e:
-        print(f"API request failed for {keyword}: {e}")
+        print(f"API request failed for {keyword} in {target_geo}: {e}")
         return {"rank": 99, "type": "Unranked", "volume": 0, "competitors": []}
     
-    # Extract total results index size as volume proxy
     search_volume = res.get("search_information", {}).get("total_results", 0)
-
     client_rank = 99
     rank_type = "Unranked"
     competitors = []
@@ -70,7 +74,7 @@ def sync_active_keywords():
         .eq("is_active", True)\
         .execute().data
 
-    print(f"Executing sync for {len(active_terms)} active keywords...")
+    print(f"Executing sync for {len(active_terms)} active keywords across specified Zip Codes...")
 
     for row in active_terms:
         kw_id = row["id"]
@@ -78,6 +82,7 @@ def sync_active_keywords():
         keyword = row["keyword"]
         client_name = row["clients"]["name"] if row.get("clients") else "Client"
         
+        # Use explicit Zip Code if available, fallback to location or default
         target_location = row.get("zip_code") or row.get("location") or "United States"
 
         telemetry = fetch_serp_data(keyword, client_name, target_location)
@@ -91,7 +96,7 @@ def sync_active_keywords():
             "top_competitors": telemetry["competitors"]
         }).execute()
 
-        print(f"Logged '{keyword}' for {client_name} at target '{target_location}': Rank #{telemetry['rank']} | Competitors: {telemetry['competitors']}")
+        print(f"Logged '{keyword}' for {client_name} in Zip/Geo '{target_location}': Rank #{telemetry['rank']} | Competitors: {telemetry['competitors']}")
 
 if __name__ == "__main__":
     sync_active_keywords()
